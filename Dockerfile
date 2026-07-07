@@ -17,8 +17,8 @@ RUN apt-get update && \
 # Install Python dependencies
 RUN python -m pip install --no-cache-dir -r requirements.txt
 
-# Copy application source
-COPY rag.py .
+# Application source will be added once the app is ready
+# COPY rag.py .
 
 # Expose Streamlit default port
 EXPOSE 8501
