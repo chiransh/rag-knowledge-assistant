@@ -1,0 +1,19 @@
+# Core RAG and AI framework
+txtai[graph,pipeline-data,pipeline-llm]>=9.10.0
+
+# Streamlit UI
+streamlit
+
+# Graph visualization
+matplotlib
+networkx
+
+# Pin grand-cypher until upstream fix is released
+# See: https://github.com/aplbrain/grand-cypher/pull/87
+grand-cypher==0.13.0
+
+# Image processing
+Pillow
+
+# Progress bar for batch operations
+tqdm
