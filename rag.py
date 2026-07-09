@@ -30,6 +30,27 @@ class AutoId:
     when assigning LLM topics to graph nodes.
     """
 
+    @staticmethod
+    def valid(uid):
+        """
+        Checks if uid is a valid auto id (UUID or numeric).
+
+        Args:
+            uid: input id to check
+
+        Returns:
+            True if this is an auto-generated id, False otherwise
+        """
+
+        # Check if this is a UUID
+        try:
+            return UUID(str(uid))
+        except ValueError:
+            pass
+
+        # Return True if numeric, False otherwise
+        return isinstance(uid, int) or (isinstance(uid, str) and uid.isdigit())
+
 
 class GraphContext:
     """
