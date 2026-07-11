@@ -71,6 +71,44 @@ class Application:
     Handles both vector and graph-based retrieval depending on the query type.
     """
 
+    def __init__(self):
+        # Textractor instance — lazy loaded on first file/URL upload
+        self.textractor = None
+
+        # Load LLM from env or fall back to default open-weight model
+        self.llm = LLM(os.environ.get("LLM", "Qwen/Qwen3-4B-Instruct-2507"))
+
+        # Load or create the embeddings index
+        self.embeddings = self.load()
+
+        # Number of context records passed to the LLM per query
+        self.context = int(os.environ.get("CONTEXT", 10))
+
+        # Prompt template — constrains the LLM to only use supplied context
+        template = """
+Answer the following question using only the context below. Only include information
+specifically discussed.
+
+question: {question}
+context: {context} """
+
+        # Build the RAG pipeline with the loaded embeddings and LLM
+        self.rag = RAG(
+            self.embeddings,
+            self.llm,
+            system="You are a friendly assistant. You answer questions from users.",
+            template=template,
+            context=self.context,
+        )
+
+    def load(self):
+        """Loads or creates an embeddings index. Implementation coming soon."""
+        raise NotImplementedError
+
+    def create(self):
+        """Creates a new empty embeddings index. Implementation coming soon."""
+        raise NotImplementedError
+
 
 @st.cache_resource(show_spinner="Initializing models and database...")
 def create():
