@@ -106,8 +106,26 @@ context: {context} """
         raise NotImplementedError
 
     def create(self):
-        """Creates a new empty embeddings index. Implementation coming soon."""
-        raise NotImplementedError
+        """
+        Creates a new empty embeddings index with graph support enabled.
+
+        Uses:
+          - intfloat/e5-large for dense vector embeddings
+          - UUID5 auto-ids for content-addressed deduplication
+          - E5 query/passage instruction prefixes
+          - Approximate-off graph for precise similarity edges
+
+        Returns:
+            Embeddings: a fresh, empty embeddings index ready for upsert
+        """
+
+        return Embeddings(
+            autoid="uuid5",
+            path="intfloat/e5-large",
+            instructions={"query": "query: ", "data": "passage: "},
+            content=True,
+            graph={"approximate": False, "minscore": 0.7},
+        )
 
 
 @st.cache_resource(show_spinner="Initializing models and database...")
