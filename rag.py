@@ -102,8 +102,49 @@ context: {context} """
         )
 
     def load(self):
-        """Loads or creates an embeddings index. Implementation coming soon."""
-        raise NotImplementedError
+        """
+        Loads an existing embeddings index or creates a new one if none is found.
+
+        Resolution order:
+          1. Load from local path if EMBEDDINGS points to an existing directory
+          2. Pull from HuggingFace Hub if EMBEDDINGS is a hub repo name
+          3. Fall back to a fresh empty index via create()
+
+        Also indexes an optional local DATA directory on startup and persists
+        the updated index if PERSIST is set.
+
+        Returns:
+            Embeddings: a ready-to-query embeddings index
+        """
+
+        embeddings = None
+        data = os.environ.get("DATA")
+        database = os.environ.get("EMBEDDINGS", "neuml/txtai-wikipedia-slim")
+
+        if database:
+            embeddings = Embeddings()
+
+            if embeddings.exists(database):
+                # Load from local path
+                embeddings.load(database)
+            elif not os.path.isabs(database) and embeddings.exists(
+                cloud={"provider": "huggingface-hub", "container": database}
+            ):
+                # Pull from HuggingFace Hub
+                embeddings.load(provider="huggingface-hub", container=database)
+            else:
+                embeddings = None
+
+        # Fall back to a new empty index if nothing was found
+        embeddings = embeddings if embeddings else self.create()
+
+        # Index a local data directory if provided
+        if data:
+            embeddings.upsert(self.stream(data))
+            self.infertopics(embeddings, 0)
+            self.persist(embeddings)
+
+        return embeddings
 
     def create(self):
         """
