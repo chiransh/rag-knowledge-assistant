@@ -168,6 +168,45 @@ context: {context} """
             graph={"approximate": False, "minscore": 0.7},
         )
 
+    def stream(self, data):
+        """
+        Walks a directory recursively and streams extracted text sections
+        from every file found, ready for upsert into the embeddings index.
+
+        Args:
+            data: path to the root data directory
+
+        Yields:
+            extracted text sections from each file
+        """
+
+        for sections in self.extract(glob(f"{data}/**/*", recursive=True)):
+            yield from sections
+
+    def extract(self, inputs):
+        """
+        Runs the Textractor pipeline over one or more inputs (file paths or URLs)
+        and returns extracted paragraph-level sections.
+
+        Textractor is lazy-initialised on first call so the heavy import and
+        Java runtime only load when actually needed.
+
+        Args:
+            inputs: a single input or list of file paths / URLs
+
+        Returns:
+            list of extracted text sections
+        """
+
+        if not self.textractor:
+            self.textractor = Textractor(
+                paragraphs=True,
+                backend=os.environ.get("TEXTBACKEND", "available"),
+                safeopen=os.environ.get("SAFEOPEN", "True").lower() in ("true", "1"),
+            )
+
+        return self.textractor(inputs)
+
 
 @st.cache_resource(show_spinner="Initializing models and database...")
 def create():
