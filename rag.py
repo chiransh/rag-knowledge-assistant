@@ -228,6 +228,21 @@ context: {context} """
         self.infertopics(self.embeddings, start)
         self.persist(self.embeddings)
 
+    def persist(self, embeddings):
+        """
+        Saves the embeddings index to disk if the PERSIST env variable is set.
+
+        This is a no-op when PERSIST is unset, allowing the app to run in
+        fully in-memory mode without any filesystem side effects.
+
+        Args:
+            embeddings: the embeddings instance to save
+        """
+
+        persist = os.environ.get("PERSIST")
+        if persist:
+            embeddings.save(persist)
+
 
 @st.cache_resource(show_spinner="Initializing models and database...")
 def create():
