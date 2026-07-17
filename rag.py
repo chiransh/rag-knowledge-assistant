@@ -207,6 +207,27 @@ context: {context} """
 
         return self.textractor(inputs)
 
+    def addurl(self, url):
+        """
+        Adds content from a URL or local file path into the live embeddings index.
+
+        Workflow:
+          1. Record how many entries exist before ingestion
+          2. Extract and upsert the new content
+          3. Infer LLM-generated topics for any new graph nodes
+          4. Persist the updated index to disk (if PERSIST is set)
+
+        Args:
+            url: a URL string or local file path to ingest
+        """
+
+        # Snapshot current count so infertopics only processes new entries
+        start = self.embeddings.count()
+
+        self.embeddings.upsert(self.extract(url))
+        self.infertopics(self.embeddings, start)
+        self.persist(self.embeddings)
+
 
 @st.cache_resource(show_spinner="Initializing models and database...")
 def create():
