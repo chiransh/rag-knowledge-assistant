@@ -243,6 +243,56 @@ context: {context} """
         if persist:
             embeddings.save(persist)
 
+    def topics(self, embeddings, batch):
+        """
+        Generates a short topic label for each (uid, text) pair in the batch
+        using the LLM, then writes the result directly onto each graph node.
+
+        A single prompt is built per entry and the whole batch is sent to the
+        LLM in one call to minimise round-trips. An optional TOPICSBATCH env
+        variable controls the LLM's internal batch size for memory-constrained
+        environments.
+
+        Args:
+            embeddings: the embeddings instance whose graph nodes will be labelled
+            batch: list of (node_id, text) tuples to generate topics for
+        """
+
+        prompt = """
+Create a simple, concise topic for the following text. Only return the topic name.
+
+Text:
+{text}"""
+
+        # Build one prompt message per entry in the batch
+        prompts = []
+        for uid, text in batch:
+            text = text if re.search(r"\w+", text) else uid
+            prompts.append([{"role": "user", "content": prompt.format(text=text)}])
+
+        # Respect optional batch size cap for memory-constrained setups
+        topicsbatch = os.environ.get("TOPICSBATCH")
+        kwargs = {"batch_size": int(topicsbatch)} if topicsbatch else {}
+
+        # Run all prompts through the LLM and assign results to graph nodes
+        for x, topic in enumerate(
+            self.llm(
+                prompts,
+                maxlength=int(os.environ.get("MAXLENGTH", 2048)),
+                stripthink=os.environ.get("STRIPTHINK", "false").lower() in ("true", "1"),
+                **kwargs,
+            )
+        ):
+            uid = batch[x][0]
+            embeddings.graph.addattribute(uid, "topic", topic)
+
+            # Register the topic in the graph's topic index
+            topics = embeddings.graph.topics
+            if topics:
+                if topic not in topics:
+                    topics[topic] = []
+                topics[topic].append(uid)
+
 
 @st.cache_resource(show_spinner="Initializing models and database...")
 def create():
