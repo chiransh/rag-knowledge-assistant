@@ -293,6 +293,46 @@ Text:
                     topics[topic] = []
                 topics[topic].append(uid)
 
+    def infertopics(self, embeddings, start):
+        """
+        Traverses the graph associated with an embeddings instance and triggers
+        LLM topic generation for every node that still has no topic label.
+
+        Only nodes with auto-generated IDs (UUID or numeric) are considered —
+        user-supplied string IDs are skipped since they are already meaningful.
+        Nodes are processed in batches of 32 to keep LLM calls efficient.
+
+        Args:
+            embeddings: embeddings instance whose graph nodes will be labelled
+            start: count of nodes before the latest upsert — used to skip
+                   nodes that were already labelled in a previous run
+        """
+
+        if not embeddings.graph:
+            return
+
+        batch = []
+        for uid in tqdm(
+            embeddings.graph.scan(),
+            desc="Inferring topics",
+            total=embeddings.graph.count() - start,
+        ):
+            rid = embeddings.graph.attribute(uid, "id")
+            topic = embeddings.graph.attribute(uid, "topic")
+
+            # Only infer topics for auto-generated IDs that have no label yet
+            if AutoId.valid(rid) and not topic:
+                text = embeddings.graph.attribute(uid, "text") or rid
+                batch.append((uid, text))
+
+                if len(batch) == 32:
+                    self.topics(embeddings, batch)
+                    batch = []
+
+        # Process any remaining nodes under the 32-item threshold
+        if batch:
+            self.topics(embeddings, batch)
+
 
 @st.cache_resource(show_spinner="Initializing models and database...")
 def create():
