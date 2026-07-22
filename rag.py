@@ -62,6 +62,58 @@ class GraphContext:
       - A -> B gq: <query>  — path traversal combined with graph query
     """
 
+    def __init__(self, embeddings, context):
+        """
+        Creates a new GraphContext.
+
+        Args:
+            embeddings: embeddings instance that holds the knowledge graph
+            context: maximum number of records to include as RAG context
+        """
+
+        self.embeddings = embeddings
+        self.context = context
+
+    def parse(self, question):
+        """
+        Attempts to parse a question as a graph query.
+
+        Recognised patterns:
+          - "gq: <query>"             → pure graph query expansion
+          - "A -> B -> C"             → concept path traversal
+          - "A -> B gq: <query>"      → path traversal + graph query
+
+        Returns query=None and concepts=None for plain vector RAG questions.
+
+        Args:
+            question: raw user input string
+
+        Returns:
+            tuple of (query, concepts, context) where context is always None
+            at parse time — it is populated later by __call__
+        """
+
+        prefix = "gq: "
+        query, concepts, context = None, None, None
+
+        if "->" in question or question.strip().lower().startswith(prefix):
+            # Split on "->" to extract the concept chain
+            concepts = [x.strip() for x in question.strip().lower().split("->")]
+
+            # Check if the last concept contains an embedded graph query
+            if prefix in concepts[-1]:
+                query, concepts = concepts[-1], concepts[:-1]
+                parts = [x.strip() for x in query.split(prefix, 1)]
+
+                # Carry forward any leading concept before "gq:"
+                if parts[0]:
+                    concepts.append(parts[0])
+
+                # Extract the actual query text after "gq:"
+                query = parts[1] if len(parts) > 1 else None
+
+        return query, concepts, context
+
 
 class Application:
     """
