@@ -114,6 +114,43 @@ class GraphContext:
 
         return query, concepts, context
 
+    def path(self, question, concepts):
+        """
+        Builds a Cypher MATCH PATH query from a list of concepts or a free-text
+        question, then returns it ready for graph traversal.
+
+        Two strategies depending on input:
+          - concepts provided → find the single best-matching node per concept
+            and chain them into a directed path
+          - no concepts (gq: only) → seed from the top-3 vector search results
+
+        Each node is expressed as ({id: "<uid>"}) and joined with
+        -[*1..4]-> to allow up to 4 hops between consecutive anchors.
+
+        Args:
+            question: free-text query used when no explicit concepts exist
+            concepts: list of concept strings from the "->" chain, or None
+
+        Returns:
+            Cypher MATCH PATH query string
+        """
+
+        ids = []
+
+        if concepts:
+            # Anchor one node per concept using nearest-neighbour search
+            for concept in concepts:
+                uid = self.embeddings.search(concept, 1)[0]["id"]
+                ids.append(f'({{id: "{uid}"}})')
+        else:
+            # Seed from top-3 vector search hits when no concept chain given
+            for result in self.embeddings.search(question, 3):
+                ids.append(f"({{id: \"{result['id']}\"}})")
+
+        # Join anchors with variable-length directed edges (1–4 hops)
+        path = "-[*1..4]->".join(ids)
+        return f"MATCH P={path} RETURN P LIMIT {self.context}"
+
 
 class Application:
     """
