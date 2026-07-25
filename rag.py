@@ -151,6 +151,63 @@ class GraphContext:
         path = "-[*1..4]->".join(ids)
         return f"MATCH P={path} RETURN P LIMIT {self.context}"
 
+    def __call__(self, question):
+        """
+        Attempts to build a graph context for the input question.
+
+        If the embeddings index has a graph and the question is a recognised
+        graph query pattern, this method:
+          1. Parses the question into a query and/or concept chain
+          2. Builds a Cypher MATCH PATH query from those concepts
+          3. Runs the path query against the graph
+          4. Renders and displays the resulting graph as an image
+          5. Returns the matched nodes as context for the LLM
+
+        Plain vector RAG questions pass through unchanged with context=None,
+        letting the caller fall back to standard vector search.
+
+        Args:
+            question: raw user input string
+
+        Returns:
+            tuple of (question, context) — context is a list of
+            {"id": ..., "text": ...} dicts, or None for vector RAG
+        """
+
+        query, concepts, context = self.parse(question)
+
+        if self.embeddings.graph and (query or concepts):
+            cypher = self.path(query, concepts)
+            graph = self.embeddings.graph.search(cypher, graph=True)
+
+            if graph.count():
+                # Render the graph and push it into the Streamlit chat history
+                image = self.plot(graph)
+                st.write(image)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": image}
+                )
+
+                # Build context from every node in the traversal result
+                context = [
+                    {
+                        "id": graph.attribute(node, "id"),
+                        "text": graph.attribute(node, "text"),
+                    }
+                    for node in graph.scan()
+                ]
+
+                if context:
+                    # Use the user's query as the question, or a summary prompt
+                    default = (
+                        "Write a title and text summarizing the context.\n"
+                        f"Include the following concepts: {concepts} "
+                        "if they're mentioned in the context."
+                    )
+                    question = query if query else default
+
+        return question, context
+
 
 class Application:
     """
