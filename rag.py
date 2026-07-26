@@ -208,6 +208,92 @@ class GraphContext:
 
         return question, context
 
+    def deduplicate(self, graph, threshold):
+        """
+        Merges graph nodes whose topic labels are semantically similar above
+        the given threshold, then returns the cleaned graph and a label map.
+
+        When a duplicate is found, its outgoing edges are copied to the primary
+        node before it is deleted, preserving graph connectivity.
+
+        Args:
+            graph: the graph result from a path traversal
+            threshold: cosine similarity score above which two topics are merged
+
+        Returns:
+            tuple of (deduplicated graph, {node: label} dict for rendering)
+        """
+
+        labels, topics, deletes = {}, {}, []
+
+        for node in graph.scan():
+            uid = graph.attribute(node, "id")
+            topic = graph.attribute(node, "topic")
+
+            # Prefer the topic label; fall back to the raw id for display
+            label = topic if AutoId.valid(uid) and topic else uid
+
+            # Check similarity against all topics seen so far
+            topicnames = list(topics.keys())
+            pid, pscore = (
+                self.embeddings.similarity(label, topicnames)[0]
+                if topicnames
+                else (0, 0.0)
+            )
+            primary = topics[topicnames[pid]] if pscore >= threshold else None
+
+            if not primary:
+                labels[node] = label
+                topics[label] = node
+            else:
+                # Re-wire edges from duplicate to the primary node
+                edges = graph.edges(node)
+                if edges:
+                    for target, attributes in edges.items():
+                        if primary != target:
+                            graph.addedge(primary, target, **attributes)
+                deletes.append(node)
+
+        graph.delete(deletes)
+        return graph, labels
+
+    def plot(self, graph):
+        """
+        Renders the deduplicated knowledge graph as a PNG image using
+        networkx and matplotlib, then returns it as a PIL Image object
+        ready for display in Streamlit.
+
+        Args:
+            graph: traversal result graph to visualise
+
+        Returns:
+            PIL Image of the rendered graph
+        """
+
+        graph, labels = self.deduplicate(graph, 0.9)
+
+        options = {
+            "node_size": 700,
+            "node_color": "#ffbd45",
+            "edge_color": "#e9ecef",
+            "font_color": "#454545",
+            "font_size": 10,
+            "alpha": 1.0,
+        }
+
+        _, ax = plt.subplots(figsize=(9, 5))
+        pos = nx.spring_layout(graph.backend, seed=0, k=0.9, iterations=50)
+        nx.draw_networkx(graph.backend, pos=pos, labels=labels, **options)
+
+        ax.axis("off")
+        plt.margins(x=0.15)
+
+        buffer = BytesIO()
+        plt.savefig(buffer, format="png", bbox_inches="tight")
+        buffer.seek(0)
+        plt.close()
+        return Image.open(buffer)
+
 
 class Application:
     """
