@@ -565,6 +565,74 @@ Text:
         if batch:
             self.topics(embeddings, batch)
 
+    def instructions(self):
+        """
+        Generates the opening chat message shown on first load.
+
+        Reads example queries from the EXAMPLES env variable (semicolon-
+        separated) or falls back to sensible defaults. Appends GraphRAG
+        usage hints when the loaded index has a graph layer.
+
+        Returns:
+            str: formatted markdown instructions for the Streamlit chat
+        """
+
+        if "EXAMPLES" in os.environ:
+            examples = [x.strip() for x in os.environ["EXAMPLES"].split(";")]
+        else:
+            examples = [
+                "Who created Linux?",
+                "gq: Tell me about Linux",
+                "linux -> macos -> microsoft windows",
+                "linux -> macos -> microsoft windows gq: Tell me about Linux",
+            ]
+
+        empty_note = "**The index is currently empty**" if not self.embeddings.count() else ""
+
+        instructions = (
+            f"Ask a question such as `{examples[0]}`\n\n"
+            f"{empty_note}\n\n"
+            "`📄 Data` can be added to this index as follows.\n\n"
+            "- `# file path or URL`\n"
+            "- `# custom notes and text as a string here!`"
+        )
+
+        if "graph" in self.embeddings.config:
+            instructions += (
+                "\n\nThis index also supports `📈 GraphRAG`. Examples are shown below.\n"
+                f"- `{examples[1]}`\n"
+                "  - Graph rag query, the `gq: ` prefix enables graph rag\n"
+                f"- `{examples[2]}`\n"
+                "  - Graph path query for a list of concepts separated by `->`\n"
+                "  - The graph path is analysed and described by the LLM\n"
+                f"- `{examples[3]}`\n"
+                "  - Graph path with a graph rag query"
+            )
+
+        return instructions
+
+    def settings(self):
+        """
+        Generates a markdown table of the current runtime configuration,
+        displayed when the user types ':settings' in the chat.
+
+        Returns:
+            str: markdown table with active environment variable values
+        """
+
+        rows = "\n".join(
+            f"|{name}|{os.environ.get(name)}|"
+            for name in ["EMBEDDINGS", "DATA", "PERSIST", "LLM"]
+        )
+
+        return (
+            "Current settings:\n\n"
+            "|Name|Value|\n"
+            "|----|-----|\n"
+            f"|RECORD COUNT|{self.embeddings.count()}|\n"
+            f"{rows}"
+        )
+
 
 @st.cache_resource(show_spinner="Initializing models and database...")
 def create():
