@@ -633,6 +633,79 @@ Text:
             f"{rows}"
         )
 
+    def run(self):
+        """
+        Runs the Streamlit chat interface.
+
+        On first load, seeds the message history with the welcome instructions.
+        Each user turn is then routed to one of three handlers:
+          - File / URL upload  — question begins with '#'
+          - Settings display   — question is ':settings'
+          - RAG query          — everything else, vector or graph depending
+                                 on whether GraphContext finds a match
+        """
+
+        # Seed chat history on first load
+        if "messages" not in st.session_state:
+            st.session_state.messages = [
+                {"role": "assistant", "content": self.instructions()}
+            ]
+
+        # Capture new user input
+        if question := st.chat_input("Your question"):
+            # Show a friendlier label for upload commands
+            display = (
+                f"Upload request for _{question.split('#')[-1].strip()}_"
+                if question.startswith("#")
+                else question
+            )
+            st.session_state.messages.append({"role": "user", "content": display})
+
+        # Render the full message history
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+
+        # Only generate a response when the last message is from the user
+        last = st.session_state.messages[-1] if st.session_state.messages else None
+        if not last or last["role"] == "assistant":
+            return
+
+        with st.chat_message("assistant"):
+            if question.startswith("#"):
+                # --- Upload handler ---
+                url = question.split("#", 1)[1].strip()
+                with st.spinner(f"Adding {url} to index…"):
+                    self.addurl(url)
+                response = f"Added _{url}_ to index"
+                st.write(response)
+
+            elif question == ":settings":
+                # --- Settings handler ---
+                response = self.settings()
+                st.write(response)
+
+            else:
+                # --- RAG handler (vector or graph) ---
+                graph = GraphContext(self.embeddings, self.context)
+                question, context = graph(question)
+
+                if context:
+                    # Graph RAG — use node texts as context
+                    context = [x["text"] for x in context]
+                # else: vector RAG — RAG pipeline runs its own retrieval
+
+                response = self.rag(
+                    question,
+                    context,
+                    maxlength=int(os.environ.get("MAXLENGTH", 4096)),
+                    stream=True,
+                    stripthink=os.environ.get("STRIPTHINK", "False").lower() in ("true", "1"),
+                )
+                response = st.write_stream(response)
+
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
 
 @st.cache_resource(show_spinner="Initializing models and database...")
 def create():
