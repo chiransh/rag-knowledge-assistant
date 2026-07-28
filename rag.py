@@ -711,7 +711,16 @@ Text:
 def create():
     """
     Creates and caches the Application instance across Streamlit reruns.
+
+    The @st.cache_resource decorator ensures the LLM and embeddings index
+    are loaded exactly once per server session, regardless of how many times
+    Streamlit re-runs the script due to user interaction.
+
+    Returns:
+        Application: the fully initialised RAG application instance
     """
+
+    return Application()
 
 
 if __name__ == "__main__":
